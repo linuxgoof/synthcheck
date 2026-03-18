@@ -14,7 +14,7 @@ from detector import AIDetector, SUPPORTED_IMAGES, SUPPORTED_VIDEOS
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "500"))
+MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", "2048"))
 MAX_VIDEO_FRAMES = int(os.getenv("MAX_VIDEO_FRAMES", "12"))
 
 detector: AIDetector | None = None

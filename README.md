@@ -42,7 +42,7 @@ python app.py
 | Variable           | Default | Description                  |
 |--------------------|---------|------------------------------|
 | `PORT`             | `8000`  | HTTP port                    |
-| `MAX_FILE_SIZE_MB` | `500`   | Maximum upload size in MB    |
+| `MAX_FILE_SIZE_MB` | `2048`  | Maximum upload size in MB    |
 | `MAX_VIDEO_FRAMES` | `12`    | Max frames sampled per video |
 
 ## Project structure
