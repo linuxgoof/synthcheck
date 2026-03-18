@@ -23,5 +23,17 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Claude
+# AI / coding assistant artifacts
 .claude/
+CLAUDE.md
+.cursorrules
+.cursorignore
+.cursor/
+.aider*
+.copilot/
+.github/copilot-instructions.md
+.codeium/
+.tabnine/
+.continue/
+.qodo/
+.windsurfrules
