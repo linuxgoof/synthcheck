@@ -46,9 +46,16 @@
         <span class="logo-sub">AI Content Detector</span>
       </div>
     </div>
-    <div class="header-badge">
-      <span class="badge-dot"></span>
-      <span id="statusText">Loading models…</span>
+    <div class="header-right">
+      <button class="btn-library" id="libraryBtn" title="View analysis library">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>
+        Library
+        <span class="library-count-badge hidden" id="libraryCountBadge">0</span>
+      </button>
+      <div class="header-badge">
+        <span class="badge-dot"></span>
+        <span id="statusText">Loading models…</span>
+      </div>
     </div>
   </header>
 
@@ -127,6 +134,10 @@
 
     <!-- Results -->
     <section class="results-section hidden" id="resultsSection">
+      <div class="cache-banner hidden" id="cacheBanner">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v3M7 10v3M1 7h3M10 7h3M3.22 3.22l2.12 2.12M8.66 8.66l2.12 2.12M3.22 10.78l2.12-2.12M8.66 5.34l2.12-2.12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Instant result — analyzed <span id="cacheBannerDate"></span>
+      </div>
 
       <div class="result-card" id="resultCard">
         <div class="result-header">
@@ -219,6 +230,25 @@
         <p class="error-title">Analysis Failed</p>
         <p class="error-msg" id="errorMsg">An unexpected error occurred.</p>
         <button class="btn-reset" id="errorResetBtn">Try again</button>
+      </div>
+    </section>
+
+    <!-- Library -->
+    <section class="library-section hidden" id="librarySection">
+      <div class="library-header">
+        <div class="library-title-row">
+          <h2 class="library-title">Library</h2>
+          <span class="library-total" id="libraryTotal"></span>
+        </div>
+        <button class="btn-library-back" id="libraryBackBtn">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Back
+        </button>
+      </div>
+      <div class="library-grid" id="libraryGrid"></div>
+      <div class="library-empty hidden" id="libraryEmpty">
+        <svg width="40" height="40" viewBox="0 0 40 40" fill="none"><rect x="6" y="6" width="28" height="28" rx="6" stroke="#3d3d5a" stroke-width="2"/><path d="M14 20h12M20 14v12" stroke="#3d3d5a" stroke-width="2" stroke-linecap="round"/></svg>
+        <p>No analyses yet — upload something to get started.</p>
       </div>
     </section>
 

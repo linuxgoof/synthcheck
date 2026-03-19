@@ -274,6 +274,35 @@ class AIDetector:
         logger.info(f"Export complete: {output_path}")
         return result
 
+    def extract_thumbnail(self, file_path: str, output_path: str, file_type: str) -> bool:
+        """Extract a small JPEG thumbnail from an image or video. Returns True on success."""
+        try:
+            if file_type == "image":
+                img = Image.open(file_path).convert("RGB")
+                w, h = img.size
+                if w > 320:
+                    img = img.resize((320, int(h * 320 / w)), Image.LANCZOS)
+                img.save(output_path, "JPEG", quality=80)
+                return True
+            elif file_type == "video":
+                cap = cv2.VideoCapture(file_path)
+                if not cap.isOpened():
+                    return False
+                total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, total // 2))
+                ret, frame = cap.read()
+                cap.release()
+                if not ret:
+                    return False
+                h, w = frame.shape[:2]
+                if w > 320:
+                    frame = cv2.resize(frame, (320, int(h * 320 / w)))
+                cv2.imwrite(output_path, frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                return True
+        except Exception as e:
+            logger.warning(f"Thumbnail extraction failed: {e}")
+        return False
+
     def analyze_image(self, image_path: str) -> dict:
         img = Image.open(image_path)
         result = self._classify_image(img)

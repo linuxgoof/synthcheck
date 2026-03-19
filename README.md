@@ -38,6 +38,16 @@ pip install -r requirements.txt
 python app.py
 ```
 
+## Library & result caching
+
+Every analyzed file is stored in a local SQLite database (in `data/`). When the same file is uploaded again it's recognized by SHA-256 hash and the stored result is returned instantly — no re-running the models.
+
+- **Library view** — click the **Library** button in the header to browse all previously analyzed files as a card grid with thumbnails, verdict badges, and AI scores
+- **Instant cache hits** — re-uploading a known file shows an "Instant result" banner with the original analysis date
+- **Overlay caching** — exported overlay videos are stored in `data/overlays/` and served directly on subsequent requests; the export button becomes **Download Overlay** once a file has been exported
+
+All data lives in `data/` (gitignored). Delete that directory to clear the library.
+
 ## Video export
 
 After analyzing a video, an **Export with Overlay** button appears in the results. Clicking it re-uploads the video, renders every frame with the AI meter HUD burned in, and downloads the result as `synthcheck_<filename>.mp4`.
@@ -58,10 +68,12 @@ The meter shows a vertical green→yellow→red gradient bar with a moving needl
 
 ```
 synthcheck/
-├── app.py           # FastAPI backend — API routes including /api/export-video
+├── app.py           # FastAPI backend — all API routes
 ├── detector.py      # Detection logic (models, image/video analysis, overlay renderer)
+├── database.py      # SQLite library — hash dedup, thumbnail & overlay caching
 ├── requirements.txt
 ├── start.sh         # One-command launcher
+├── data/            # Runtime data — gitignored (db, thumbnails, overlays)
 └── static/
     ├── index.html
     ├── style.css

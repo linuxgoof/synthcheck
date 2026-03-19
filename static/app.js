@@ -2,6 +2,7 @@
 
 /* ── State ──────────────────────────────────────────────── */
 let currentFile = null;
+let currentHash = null;
 
 /* ── DOM refs ───────────────────────────────────────────── */
 const dropZone        = document.getElementById('dropZone');
@@ -20,6 +21,12 @@ const errorMsg        = document.getElementById('errorMsg');
 const statusText      = document.getElementById('statusText');
 const badgeDot        = document.querySelector('.badge-dot');
 const exportVideoBtn  = document.getElementById('exportVideoBtn');
+const libraryBtn      = document.getElementById('libraryBtn');
+const librarySection  = document.getElementById('librarySection');
+const libraryBackBtn  = document.getElementById('libraryBackBtn');
+const cacheBanner     = document.getElementById('cacheBanner');
+const cacheBannerDate = document.getElementById('cacheBannerDate');
+const libraryCountBadge = document.getElementById('libraryCountBadge');
 
 /* ── Health check ───────────────────────────────────────── */
 async function checkHealth() {
@@ -38,6 +45,7 @@ async function checkHealth() {
   }
 }
 checkHealth();
+refreshLibraryCount();
 
 /* ── Drag & drop ────────────────────────────────────────── */
 ['dragenter', 'dragover'].forEach(evt =>
@@ -89,7 +97,10 @@ function setFile(file) {
 
 function clearFile() {
   currentFile = null;
+  currentHash = null;
   fileInput.value = '';
+  hide(cacheBanner);
+  resetExportBtn();
   show(uploadSection);
   hide(previewSection);
   hide(resultsSection);
@@ -147,7 +158,9 @@ async function runAnalysis() {
       return;
     }
     const data = await res.json();
+    currentHash = data.file_hash || null;
     renderResults(data);
+    refreshLibraryCount();
   } catch (e) {
     stepTimers.forEach(clearTimeout);
     hide(loadingSection);
@@ -199,11 +212,30 @@ function renderResults(data) {
     });
   });
 
+  // Cache banner
+  if (data.cached) {
+    cacheBannerDate.textContent = relativeTime(data.analyzed_at);
+    cacheBanner.classList.remove('hidden');
+  } else {
+    cacheBanner.classList.add('hidden');
+  }
+
   // Export button — only for videos
   if (data.type === 'video') {
     exportVideoBtn.classList.remove('hidden');
-    exportVideoBtn.disabled = false;
-    exportVideoBtn.dataset.ready = '1';
+    if (data.overlay_ready && data.file_hash) {
+      // Already exported — offer direct download from library
+      exportVideoBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v7M5 6l3 3 3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg> Download Overlay`;
+      exportVideoBtn.dataset.mode = 'download';
+      exportVideoBtn.dataset.hash = data.file_hash;
+      exportVideoBtn.disabled = false;
+    } else if (!currentFile) {
+      // Library result, overlay not yet generated, no source file available
+      exportVideoBtn.classList.add('hidden');
+    } else {
+      exportVideoBtn.dataset.mode = 'export';
+      exportVideoBtn.disabled = false;
+    }
   } else {
     exportVideoBtn.classList.add('hidden');
   }
@@ -249,20 +281,51 @@ function renderFrameTimeline(frames, duration) {
 }
 
 /* ── Export video with overlay ──────────────────────────── */
-exportVideoBtn.addEventListener('click', async () => {
-  if (!currentFile || exportVideoBtn.disabled) return;
+function resetExportBtn() {
+  exportVideoBtn.disabled = false;
+  exportVideoBtn.dataset.mode = 'export';
+  exportVideoBtn.dataset.hash = '';
+  exportVideoBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v7M5 6l3 3 3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg> Export with Overlay`;
+}
 
+function triggerDownload(url, filename) {
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  if (isMobile) {
+    window.open(url, '_blank');
+  } else {
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.style.display = 'none';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  }
+}
+
+exportVideoBtn.addEventListener('click', async () => {
+  if (exportVideoBtn.disabled) return;
+  const mode = exportVideoBtn.dataset.mode || 'export';
+
+  // Download mode — overlay already exists, just fetch it
+  if (mode === 'download') {
+    const hash = exportVideoBtn.dataset.hash;
+    const url  = `/api/overlay/${hash}`;
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.open(url, '_blank');
+    } else {
+      const a = document.createElement('a');
+      a.href = url; a.download = `synthcheck_overlay.mp4`; a.style.display = 'none';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+    return;
+  }
+
+  // Export mode — upload file and render overlay
+  if (!currentFile) return;
   exportVideoBtn.disabled = true;
-  exportVideoBtn.innerHTML = `
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="spin-icon">
-      <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.8" stroke-dasharray="28" stroke-dashoffset="10"/>
-    </svg>
-    Rendering…`;
+  exportVideoBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="spin-icon"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.8" stroke-dasharray="28" stroke-dashoffset="10"/></svg> Rendering…`;
 
   try {
     const formData = new FormData();
     formData.append('file', currentFile);
-
     const res = await fetch('/api/export-video', { method: 'POST', body: formData });
 
     if (!res.ok) {
@@ -271,35 +334,138 @@ exportVideoBtn.addEventListener('click', async () => {
       return;
     }
 
-    // Trigger download — mobile browsers ignore programmatic anchor clicks,
-    // so open a new tab instead and let the native save/share sheet handle it.
     const blob = await res.blob();
     const url  = URL.createObjectURL(blob);
     const stem = currentFile.name.replace(/\.[^.]+$/, '');
+    triggerDownload(url, `synthcheck_${stem}.mp4`);
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (!isMobile) URL.revokeObjectURL(url);
+    else setTimeout(() => URL.revokeObjectURL(url), 60000);
 
-    if (isMobile) {
-      window.open(url, '_blank');
-      setTimeout(() => URL.revokeObjectURL(url), 60000); // keep alive for user to save
+    // Switch button to "Download Overlay" now that it's cached
+    if (currentHash) {
+      exportVideoBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v7M5 6l3 3 3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg> Download Overlay`;
+      exportVideoBtn.dataset.mode = 'download';
+      exportVideoBtn.dataset.hash = currentHash;
+      exportVideoBtn.disabled = false;
     } else {
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `synthcheck_${stem}.mp4`;
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      resetExportBtn();
     }
   } catch {
     alert('Export failed — is the server running?');
+    resetExportBtn();
   } finally {
-    exportVideoBtn.disabled = false;
-    exportVideoBtn.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v7M5 6l3 3 3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      Export with Overlay`;
+    if (exportVideoBtn.dataset.mode !== 'download') resetExportBtn();
   }
 });
+
+/* ── Library ─────────────────────────────────────────────── */
+async function refreshLibraryCount() {
+  try {
+    const res  = await fetch('/api/library');
+    const data = await res.json();
+    const n    = data.length;
+    libraryCountBadge.textContent = n;
+    if (n > 0) libraryCountBadge.classList.remove('hidden');
+    else libraryCountBadge.classList.add('hidden');
+  } catch { /* ignore */ }
+}
+
+libraryBtn.addEventListener('click', async () => {
+  hide(uploadSection); hide(previewSection); hide(resultsSection);
+  hide(errorSection);  hide(loadingSection);
+  show(librarySection);
+  await loadLibrary();
+});
+
+libraryBackBtn.addEventListener('click', () => {
+  hide(librarySection);
+  show(uploadSection);
+});
+
+async function loadLibrary() {
+  try {
+    const res   = await fetch('/api/library');
+    const items = await res.json();
+    renderLibrary(items);
+  } catch {
+    document.getElementById('libraryGrid').innerHTML =
+      '<p style="color:var(--text-muted);text-align:center">Failed to load library.</p>';
+  }
+}
+
+function renderLibrary(items) {
+  const grid  = document.getElementById('libraryGrid');
+  const empty = document.getElementById('libraryEmpty');
+  const total = document.getElementById('libraryTotal');
+  grid.innerHTML = '';
+  total.textContent = items.length ? `${items.length} item${items.length === 1 ? '' : 's'}` : '';
+
+  if (!items.length) { empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+
+  items.forEach(item => {
+    const card   = document.createElement('div');
+    const isAi   = item.is_ai;
+    const aiPct  = Math.round((item.ai_probability || 0) * 100);
+    const isVid  = item.type === 'video';
+    card.className = `library-card ${isAi ? 'verdict-ai' : 'verdict-real'}`;
+    card.dataset.hash = item.file_hash;
+
+    const thumbHtml = item.thumbnail_url
+      ? `<img src="${item.thumbnail_url}" alt="" loading="lazy" />`
+      : `<div class="library-no-thumb">${isVid ? '🎞️' : '🖼️'}</div>`;
+
+    const durHtml = isVid && item.duration_seconds
+      ? `<span>${formatDuration(item.duration_seconds)}</span> · ` : '';
+
+    card.innerHTML = `
+      <div class="library-card-thumb">
+        ${thumbHtml}
+        <div class="library-card-badge">${isAi ? '🤖' : '✅'}</div>
+        <div class="library-card-score ${isAi ? 'ai' : 'real'}">${aiPct}%</div>
+        ${item.overlay_ready ? '<div class="library-overlay-dot" title="Overlay ready">🎬</div>' : ''}
+      </div>
+      <div class="library-card-info">
+        <div class="library-card-name">${escHtml(item.filename)}</div>
+        <div class="library-card-meta">${durHtml}<span>${relativeTime(item.analyzed_at)}</span></div>
+      </div>`;
+
+    card.addEventListener('click', () => loadFromLibrary(item.file_hash));
+    grid.appendChild(card);
+  });
+}
+
+async function loadFromLibrary(hash) {
+  try {
+    const res = await fetch(`/api/result/${hash}`);
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    currentFile = null;
+    currentHash = hash;
+    hide(librarySection);
+    hide(uploadSection);
+    renderResults(data);
+    show(resultsSection);
+  } catch {
+    alert('Could not load result.');
+  }
+}
+
+/* ── Helpers ────────────────────────────────────────────── */
+function relativeTime(iso) {
+  const d    = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+  const secs = (Date.now() - d) / 1000;
+  if (secs < 60)       return 'just now';
+  if (secs < 3600)     return `${Math.floor(secs / 60)}m ago`;
+  if (secs < 86400)    return `${Math.floor(secs / 3600)}h ago`;
+  if (secs < 604800)   return `${Math.floor(secs / 86400)}d ago`;
+  return d.toLocaleDateString();
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 /* ── Error ──────────────────────────────────────────────── */
 function showError(msg) {
