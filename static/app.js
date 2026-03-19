@@ -271,18 +271,26 @@ exportVideoBtn.addEventListener('click', async () => {
       return;
     }
 
-    // Trigger browser download
-    const blob     = await res.blob();
-    const url      = URL.createObjectURL(blob);
-    const a        = document.createElement('a');
-    const stem     = currentFile.name.replace(/\.[^.]+$/, '');
-    a.href         = url;
-    a.download     = `synthcheck_${stem}.mp4`;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Trigger download — mobile browsers ignore programmatic anchor clicks,
+    // so open a new tab instead and let the native save/share sheet handle it.
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const stem = currentFile.name.replace(/\.[^.]+$/, '');
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    if (isMobile) {
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000); // keep alive for user to save
+    } else {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `synthcheck_${stem}.mp4`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
   } catch {
     alert('Export failed — is the server running?');
   } finally {
