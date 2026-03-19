@@ -8,6 +8,7 @@ Detect whether an image or video is **AI-generated** or **real/authentic** using
 - **Secondary model** — [`Organika/sdxl-detector`](https://huggingface.co/Organika/sdxl-detector): a diffusion-specific detector
 - Ensemble: 70% primary + 30% secondary weighted average
 - **Video analysis**: evenly samples up to 12 frames across the video, runs both models on each frame, then aggregates results with a temporal consistency score
+- **Video export**: re-renders the full video with a live AI probability meter burned into the corner — a green→yellow→red gauge whose needle tracks the AI score frame-by-frame
 
 ## Supported formats
 
@@ -37,6 +38,14 @@ pip install -r requirements.txt
 python app.py
 ```
 
+## Video export
+
+After analyzing a video, an **Export with Overlay** button appears in the results. Clicking it re-uploads the video, renders every frame with the AI meter HUD burned in, and downloads the result as `synthcheck_<filename>.mp4`.
+
+The meter shows a vertical green→yellow→red gradient bar with a moving needle indicating the current frame's AI probability. Scores are interpolated smoothly between the analyzed keyframes. Audio is preserved via `ffmpeg` if available on the server.
+
+> **Note:** Export re-analyzes the video, so processing time scales with video length. A 1-minute 30fps video typically takes 15–30 seconds on a CPU.
+
 ## Environment variables
 
 | Variable           | Default | Description                  |
@@ -49,8 +58,8 @@ python app.py
 
 ```
 synthcheck/
-├── app.py           # FastAPI backend (serves API + static frontend)
-├── detector.py      # Detection logic (models, image & video analysis)
+├── app.py           # FastAPI backend — API routes including /api/export-video
+├── detector.py      # Detection logic (models, image/video analysis, overlay renderer)
 ├── requirements.txt
 ├── start.sh         # One-command launcher
 └── static/
