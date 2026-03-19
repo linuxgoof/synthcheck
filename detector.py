@@ -25,67 +25,72 @@ def _score_to_color(score: float) -> tuple:
 def _draw_meter_overlay(frame: np.ndarray, ai_score: float) -> np.ndarray:
     """Draw the AI probability meter HUD onto a BGR frame. Returns the frame."""
     h, w = frame.shape[:2]
+    shorter = min(w, h)
 
-    # Scale meter to video size
-    bar_h   = max(100, min(180, int(h * 0.22)))
-    panel_w = max(56,  min(78,  int(w * 0.055)))
-    panel_h = bar_h + 44
-    margin  = max(10, int(min(w, h) * 0.015))
+    # Scale everything off the shorter edge so portrait & landscape both look right
+    panel_w  = max(100, min(220, int(shorter * 0.13)))
+    bar_h    = max(180, min(420, int(h    * 0.30)))
+    bar_w_px = max(24,  int(panel_w * 0.26))
+    lbl_h    = max(36,  int(panel_w * 0.32))   # space for each text label
+    panel_h  = bar_h + lbl_h * 2
+    margin   = max(14, int(shorter * 0.018))
     px = w - panel_w - margin
     py = h - panel_h - margin
 
     if px < 4 or py < 4:
-        return frame  # video too small to draw overlay
+        return frame  # video too small
 
-    # Semi-transparent dark background panel
+    # Semi-transparent dark panel
     roi = frame[py:py + panel_h, px:px + panel_w]
     bg  = np.full_like(roi, (18, 18, 28))
     frame[py:py + panel_h, px:px + panel_w] = cv2.addWeighted(roi, 0.2, bg, 0.8, 0)
-
-    # Panel border
     cv2.rectangle(frame, (px, py), (px + panel_w - 1, py + panel_h - 1), (55, 55, 75), 1)
 
-    font  = cv2.FONT_HERSHEY_SIMPLEX
-    fscl  = max(0.30, panel_w / 220.0)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    fscl = max(0.5, panel_w / 200.0)
+    thk  = max(1, int(fscl * 1.6))   # text thickness scales with font
 
-    # "AI" label
-    cv2.putText(frame, "AI", (px + 6, py + 14), font, fscl, (110, 110, 235), 1, cv2.LINE_AA)
+    # "AI" label at top
+    lbl_offset = max(18, int(lbl_h * 0.75))
+    cv2.putText(frame, "AI",
+                (px + panel_w // 2 - int(fscl * 14), py + lbl_offset),
+                font, fscl, (110, 110, 235), thk, cv2.LINE_AA)
 
-    # Gradient bar (red at top = AI, green at bottom = real)
-    bar_x    = px + panel_w // 2 - 7
-    bar_w_px = 14
-    bar_y    = py + 20
+    # Gradient bar
+    bar_x = px + panel_w // 2 - bar_w_px // 2
+    bar_y = py + lbl_h
 
     for i in range(bar_h):
         row_score = 1.0 - (i / (bar_h - 1))
-        color = _score_to_color(row_score)
-        # Dim parts of the bar away from the current needle position
+        color    = _score_to_color(row_score)
         needle_i = int((1.0 - ai_score) * (bar_h - 1))
         dist     = abs(i - needle_i) / bar_h
         alpha    = max(0.25, 1.0 - dist * 2.5)
-        dimmed   = tuple(int(c * alpha) for c in color)
-        frame[bar_y + i, bar_x: bar_x + bar_w_px] = dimmed
+        frame[bar_y + i, bar_x: bar_x + bar_w_px] = tuple(int(c * alpha) for c in color)
 
-    # Bar border
     cv2.rectangle(frame, (bar_x - 1, bar_y), (bar_x + bar_w_px, bar_y + bar_h), (55, 55, 75), 1)
 
-    # Needle line + dot
+    # Needle
     needle_row   = bar_y + int((1.0 - ai_score) * (bar_h - 1))
     needle_color = _score_to_color(ai_score)
-    cv2.line(frame,   (bar_x - 3, needle_row), (bar_x + bar_w_px + 3, needle_row), needle_color, 2)
-    cv2.circle(frame, (bar_x - 5, needle_row), 4, needle_color, -1)
+    n_thk        = max(2, bar_w_px // 8)
+    dot_r        = max(5, bar_w_px // 4)
+    cv2.line(frame,   (bar_x - dot_r, needle_row), (bar_x + bar_w_px + dot_r, needle_row), needle_color, n_thk)
+    cv2.circle(frame, (bar_x - dot_r - 2, needle_row), dot_r, needle_color, -1)
 
-    # Score percentage (left of bar, clamped to panel)
+    # Score percentage (clamped inside bar area)
     pct_text = f"{int(ai_score * 100)}%"
-    txt_y    = max(bar_y + 8, min(bar_y + bar_h - 2, needle_row + 4))
-    cv2.putText(frame, pct_text, (px + 2, txt_y), font, fscl * 0.88, needle_color, 1, cv2.LINE_AA)
+    txt_y    = max(bar_y + int(fscl * 14), min(bar_y + bar_h - 4, needle_row + int(fscl * 6)))
+    cv2.putText(frame, pct_text, (px + 4, txt_y), font, fscl * 0.88, needle_color, thk, cv2.LINE_AA)
 
-    # "REAL" label
-    cv2.putText(frame, "REAL", (px + 4, py + panel_h - 6), font, fscl * 0.82, (75, 200, 75), 1, cv2.LINE_AA)
+    # "REAL" label at bottom
+    cv2.putText(frame, "REAL",
+                (px + panel_w // 2 - int(fscl * 22), py + panel_h - int(lbl_h * 0.22)),
+                font, fscl * 0.9, (75, 200, 75), thk, cv2.LINE_AA)
 
     # SynthCheck watermark bottom-left
-    wm_scale = max(0.28, min(0.38, w / 2200.0))
-    cv2.putText(frame, "SynthCheck", (8, h - 8), font, wm_scale, (90, 90, 90), 1, cv2.LINE_AA)
+    wm_scale = max(0.4, min(0.7, shorter / 1400.0))
+    cv2.putText(frame, "SynthCheck", (8, h - 10), font, wm_scale, (90, 90, 90), 1, cv2.LINE_AA)
 
     return frame
 
