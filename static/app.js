@@ -19,6 +19,7 @@ const errorSection    = document.getElementById('errorSection');
 const errorMsg        = document.getElementById('errorMsg');
 const statusText      = document.getElementById('statusText');
 const badgeDot        = document.querySelector('.badge-dot');
+const exportVideoBtn  = document.getElementById('exportVideoBtn');
 
 /* ── Health check ───────────────────────────────────────── */
 async function checkHealth() {
@@ -198,6 +199,15 @@ function renderResults(data) {
     });
   });
 
+  // Export button — only for videos
+  if (data.type === 'video') {
+    exportVideoBtn.classList.remove('hidden');
+    exportVideoBtn.disabled = false;
+    exportVideoBtn.dataset.ready = '1';
+  } else {
+    exportVideoBtn.classList.add('hidden');
+  }
+
   // Video extras
   const videoExtras = document.getElementById('videoExtras');
   if (data.type === 'video') {
@@ -237,6 +247,51 @@ function renderFrameTimeline(frames, duration) {
     timeline.appendChild(bar);
   });
 }
+
+/* ── Export video with overlay ──────────────────────────── */
+exportVideoBtn.addEventListener('click', async () => {
+  if (!currentFile || exportVideoBtn.disabled) return;
+
+  exportVideoBtn.disabled = true;
+  exportVideoBtn.innerHTML = `
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="spin-icon">
+      <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.8" stroke-dasharray="28" stroke-dashoffset="10"/>
+    </svg>
+    Rendering…`;
+
+  try {
+    const formData = new FormData();
+    formData.append('file', currentFile);
+
+    const res = await fetch('/api/export-video', { method: 'POST', body: formData });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
+      alert('Export failed: ' + (err.detail || 'Unknown error'));
+      return;
+    }
+
+    // Trigger browser download
+    const blob     = await res.blob();
+    const url      = URL.createObjectURL(blob);
+    const a        = document.createElement('a');
+    const stem     = currentFile.name.replace(/\.[^.]+$/, '');
+    a.href         = url;
+    a.download     = `synthcheck_${stem}.mp4`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch {
+    alert('Export failed — is the server running?');
+  } finally {
+    exportVideoBtn.disabled = false;
+    exportVideoBtn.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v7M5 6l3 3 3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      Export with Overlay`;
+  }
+});
 
 /* ── Error ──────────────────────────────────────────────── */
 function showError(msg) {

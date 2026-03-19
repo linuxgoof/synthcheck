@@ -361,7 +361,20 @@ main {
 }
 
 /* ── Actions ──────────────────────────────────────────── */
-.result-actions { display: flex; justify-content: center; }
+.result-actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+
+.btn-export-video {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 24px; border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, rgba(6,182,212,0.15), rgba(34,197,94,0.12));
+  border: 1px solid rgba(6,182,212,0.35);
+  color: var(--cyan); font-size: 0.9rem; font-weight: 500;
+  cursor: pointer; transition: all 0.15s; font-family: inherit;
+}
+.btn-export-video:hover:not(:disabled) { background: linear-gradient(135deg, rgba(6,182,212,0.25), rgba(34,197,94,0.2)); border-color: var(--cyan); }
+.btn-export-video:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.spin-icon { animation: spin 0.9s linear infinite; }
 
 .btn-reset {
   display: flex; align-items: center; gap: 8px;

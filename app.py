@@ -7,7 +7,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from starlette.background import BackgroundTask
 
 from detector import AIDetector, SUPPORTED_IMAGES, SUPPORTED_VIDEOS
 
@@ -89,6 +90,63 @@ async def analyze(file: UploadFile = File(...)):
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
+
+
+@app.post("/api/export-video")
+async def export_video(file: UploadFile = File(...)):
+    if detector is None:
+        raise HTTPException(status_code=503, detail="Models are still loading. Please retry in a moment.")
+
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in SUPPORTED_VIDEOS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Only video files are supported for export. Got '{suffix}'.",
+        )
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp_path   = tmp.name
+        size_bytes = 0
+        chunk_size = 1024 * 1024
+        while True:
+            chunk = await file.read(chunk_size)
+            if not chunk:
+                break
+            size_bytes += len(chunk)
+            if size_bytes > MAX_FILE_SIZE_MB * 1024 * 1024:
+                os.unlink(tmp_path)
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File too large. Maximum allowed size is {MAX_FILE_SIZE_MB} MB.",
+                )
+            tmp.write(chunk)
+
+    out_path = tmp_path + "_overlay.mp4"
+
+    def cleanup():
+        for p in (tmp_path, out_path):
+            try:
+                if os.path.exists(p):
+                    os.unlink(p)
+            except OSError:
+                pass
+
+    try:
+        detector.export_video_overlay(tmp_path, out_path, max_frames=MAX_VIDEO_FRAMES)
+        stem = Path(file.filename or "video").stem
+        return FileResponse(
+            out_path,
+            media_type="video/mp4",
+            filename=f"synthcheck_{stem}.mp4",
+            background=BackgroundTask(cleanup),
+        )
+    except ValueError as e:
+        cleanup()
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        cleanup()
+        logger.exception("Video export failed")
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
 
 # Serve frontend — must be mounted AFTER API routes
