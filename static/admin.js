@@ -197,6 +197,10 @@ async function openItemModal(hash) {
       <div class="modal-video-wrap">
         <video class="modal-video" src="/api/overlay/${hash}" controls playsinline preload="metadata"></video>
         <span class="modal-video-label">AI Meter Overlay</span>
+        <a class="modal-video-download" href="/api/overlay/${hash}" download="synthcheck_overlay_${hash.slice(0,8)}.mp4" title="Download">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 2v7M4 6l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M1 11v1a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          Download
+        </a>
       </div>`;
   } else if (data.thumbnail_url) {
     mediaHtml = `<img src="${data.thumbnail_url}" class="modal-thumb" alt="">`;

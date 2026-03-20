@@ -3,47 +3,53 @@
 /* ── State ──────────────────────────────────────────────── */
 let currentFile      = null;
 let currentHash      = null;
-let pendingTags      = [];   // suggested but not yet accepted
-let acceptedTags     = [];   // accepted/saved tags (dirty until saved)
+let pendingTags      = [];
+let acceptedTags     = [];
 let tagsDirty        = false;
-let libraryItems     = [];   // full library cache
+let libraryItems     = [];
 let libActiveType    = 'all';
 let libActiveTag     = null;
+let overlayBlobUrl   = null;   // blob URL for freshly generated overlay
 
 /* ── DOM refs ───────────────────────────────────────────── */
-const dropZone          = document.getElementById('dropZone');
-const fileInput         = document.getElementById('fileInput');
-const uploadSection     = document.getElementById('uploadSection');
-const previewSection    = document.getElementById('previewSection');
-const previewMediaWrap  = document.getElementById('previewMediaWrap');
-const previewFilename   = document.getElementById('previewFilename');
-const previewFilesize   = document.getElementById('previewFilesize');
-const clearBtn          = document.getElementById('clearBtn');
-const analyzeBtn        = document.getElementById('analyzeBtn');
-const loadingSection    = document.getElementById('loadingSection');
-const resultsSection    = document.getElementById('resultsSection');
-const errorSection      = document.getElementById('errorSection');
-const statusText        = document.getElementById('statusText');
-const badgeDot          = document.querySelector('.badge-dot');
-const exportVideoBtn    = document.getElementById('exportVideoBtn');
-const libraryBtn        = document.getElementById('libraryBtn');
-const librarySection    = document.getElementById('librarySection');
-const libraryBackBtn    = document.getElementById('libraryBackBtn');
-const cacheBanner       = document.getElementById('cacheBanner');
-const cacheBannerDate   = document.getElementById('cacheBannerDate');
-const libraryCountBadge = document.getElementById('libraryCountBadge');
+const dropZone             = document.getElementById('dropZone');
+const fileInput            = document.getElementById('fileInput');
+const uploadSection        = document.getElementById('uploadSection');
+const previewSection       = document.getElementById('previewSection');
+const previewMediaWrap     = document.getElementById('previewMediaWrap');
+const previewFilename      = document.getElementById('previewFilename');
+const previewFilesize      = document.getElementById('previewFilesize');
+const clearBtn             = document.getElementById('clearBtn');
+const analyzeBtn           = document.getElementById('analyzeBtn');
+const loadingSection       = document.getElementById('loadingSection');
+const resultsSection       = document.getElementById('resultsSection');
+const errorSection         = document.getElementById('errorSection');
+const statusText           = document.getElementById('statusText');
+const badgeDot             = document.querySelector('.badge-dot');
+const libraryBtn           = document.getElementById('libraryBtn');
+const librarySection       = document.getElementById('librarySection');
+const libraryBackBtn       = document.getElementById('libraryBackBtn');
+const cacheBanner          = document.getElementById('cacheBanner');
+const cacheBannerDate      = document.getElementById('cacheBannerDate');
+const libraryCountBadge    = document.getElementById('libraryCountBadge');
 // Tags
-const tagsSection       = document.getElementById('tagsSection');
-const tagsSuggested     = document.getElementById('tagsSuggested');
-const tagsSaved         = document.getElementById('tagsSaved');
-const tagsHint          = document.getElementById('tagsHint');
-const tagInput          = document.getElementById('tagInput');
-const addTagBtn         = document.getElementById('addTagBtn');
-const saveTagsBtn       = document.getElementById('saveTagsBtn');
+const tagsSection          = document.getElementById('tagsSection');
+const tagsSuggested        = document.getElementById('tagsSuggested');
+const tagsSaved            = document.getElementById('tagsSaved');
+const tagsHint             = document.getElementById('tagsHint');
+const tagInput             = document.getElementById('tagInput');
+const addTagBtn            = document.getElementById('addTagBtn');
+const saveTagsBtn          = document.getElementById('saveTagsBtn');
+// Overlay player
+const overlayPlayerSection = document.getElementById('overlayPlayerSection');
+const overlayGenerating    = document.getElementById('overlayGenerating');
+const overlayReady         = document.getElementById('overlayReady');
+const overlayVideo         = document.getElementById('overlayVideo');
+const downloadOverlayBtn   = document.getElementById('downloadOverlayBtn');
 // Library filters
-const libTagFilter      = document.getElementById('libTagFilter');
-const libTagChips       = document.getElementById('libTagChips');
-const libTagClearBtn    = document.getElementById('libTagClearBtn');
+const libTagFilter         = document.getElementById('libTagFilter');
+const libTagChips          = document.getElementById('libTagChips');
+const libTagClearBtn       = document.getElementById('libTagClearBtn');
 
 /* ── Health check ───────────────────────────────────────── */
 async function checkHealth() {
@@ -101,8 +107,9 @@ function setFile(file) {
 function clearFile() {
   currentFile = null; currentHash = null;
   fileInput.value = '';
-  hide(cacheBanner); resetExportBtn(); resetTags();
+  hide(cacheBanner); resetTags(); resetOverlayPlayer();
   show(uploadSection); hide(previewSection); hide(resultsSection); hide(errorSection);
+  if (overlayBlobUrl) { URL.revokeObjectURL(overlayBlobUrl); overlayBlobUrl = null; }
 }
 
 clearBtn.addEventListener('click', clearFile);
@@ -205,24 +212,6 @@ function renderResults(data) {
     cacheBanner.classList.add('hidden');
   }
 
-  // Export button
-  if (data.type === 'video') {
-    exportVideoBtn.classList.remove('hidden');
-    if (data.overlay_ready && data.file_hash) {
-      exportVideoBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v7M5 6l3 3 3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg> Download Overlay`;
-      exportVideoBtn.dataset.mode = 'download';
-      exportVideoBtn.dataset.hash = data.file_hash;
-      exportVideoBtn.disabled = false;
-    } else if (!currentFile) {
-      exportVideoBtn.classList.add('hidden');
-    } else {
-      exportVideoBtn.dataset.mode = 'export';
-      exportVideoBtn.disabled = false;
-    }
-  } else {
-    exportVideoBtn.classList.add('hidden');
-  }
-
   // Video extras
   const videoExtras = document.getElementById('videoExtras');
   if (data.type === 'video') {
@@ -242,6 +231,13 @@ function renderResults(data) {
   renderTagsSection(data.suggested_tags || [], data.tags || [], !!data.cached);
 
   show(resultsSection);
+
+  // Auto-generate overlay for videos
+  if (data.type === 'video') {
+    startOverlayExport(data);
+  } else {
+    hide(overlayPlayerSection);
+  }
 }
 
 function renderFrameTimeline(frames, duration) {
@@ -256,6 +252,84 @@ function renderFrameTimeline(frames, duration) {
     bar.setAttribute('data-tooltip', `${f.verdict} @ ${f.timestamp}s — AI: ${Math.round(f.ai_probability * 100)}%`);
     timeline.appendChild(bar);
   });
+}
+
+/* ── Overlay player ─────────────────────────────────────── */
+function resetOverlayPlayer() {
+  hide(overlayPlayerSection);
+  hide(overlayReady);
+  overlayGenerating.classList.remove('hidden');
+  overlayVideo.src = '';
+  overlayVideo.load();
+}
+
+async function startOverlayExport(data) {
+  show(overlayPlayerSection);
+
+  // Already exported — just show the player
+  if (data.overlay_ready && data.file_hash) {
+    showOverlayPlayer(`/api/overlay/${data.file_hash}`, data.file_hash);
+    return;
+  }
+
+  // From library card click with no file — can't re-export
+  if (!currentFile) {
+    hide(overlayPlayerSection);
+    return;
+  }
+
+  // Fresh upload — auto-export
+  show(overlayGenerating);
+  hide(overlayReady);
+
+  try {
+    const formData = new FormData();
+    formData.append('file', currentFile);
+    const res = await fetch('/api/export-video', { method: 'POST', body: formData });
+
+    if (!res.ok) {
+      hide(overlayPlayerSection);
+      return;
+    }
+
+    // Revoke any previous blob
+    if (overlayBlobUrl) { URL.revokeObjectURL(overlayBlobUrl); overlayBlobUrl = null; }
+
+    const blob = await res.blob();
+    overlayBlobUrl = URL.createObjectURL(blob);
+
+    // Prefer the persistent API URL for the player so it survives page actions;
+    // fall back to blob if hash isn't known yet.
+    const playerSrc = currentHash ? `/api/overlay/${currentHash}` : overlayBlobUrl;
+    showOverlayPlayer(playerSrc, currentHash);
+
+    // Refresh library badge now that overlay is cached
+    refreshLibraryCount();
+
+  } catch {
+    hide(overlayPlayerSection);
+  }
+}
+
+function showOverlayPlayer(src, hash) {
+  hide(overlayGenerating);
+  overlayVideo.src = src;
+  overlayVideo.load();
+
+  // Wire download button
+  downloadOverlayBtn.onclick = () => {
+    const filename = `synthcheck_overlay.mp4`;
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.open(src, '_blank');
+    } else {
+      const a = document.createElement('a');
+      a.href = src; a.download = filename; a.style.display = 'none';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+  };
+
+  show(overlayReady);
 }
 
 /* ── Tags UI ─────────────────────────────────────────────── */
@@ -273,12 +347,9 @@ function resetTags() {
 function renderTagsSection(suggested, saved, isCached) {
   resetTags();
   acceptedTags = [...saved];
-
   if (isCached || !suggested.length) {
-    // Already saved or no suggestions — just show saved tags in edit mode
     tagsHint.textContent = saved.length ? 'Click × to remove · add more below' : 'No tags yet — add some below';
   } else {
-    // Fresh analysis — show suggestions
     pendingTags = suggested.filter(t => !saved.includes(t));
     if (pendingTags.length) {
       tagsSuggested.classList.remove('hidden');
@@ -329,11 +400,8 @@ function removeAcceptedTag(tag) {
 }
 
 function updateSaveBtn() {
-  if (tagsDirty && currentHash) {
-    saveTagsBtn.classList.remove('hidden');
-  } else {
-    saveTagsBtn.classList.add('hidden');
-  }
+  if (tagsDirty && currentHash) saveTagsBtn.classList.remove('hidden');
+  else saveTagsBtn.classList.add('hidden');
 }
 
 addTagBtn.addEventListener('click', addCustomTag);
@@ -362,87 +430,12 @@ saveTagsBtn.addEventListener('click', async () => {
     saveTagsBtn.classList.add('hidden');
     saveTagsBtn.disabled = false;
     saveTagsBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l4 4 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Save Tags`;
-    // dismiss remaining suggestions silently
     pendingTags = [];
     tagsSuggested.classList.add('hidden');
     tagsHint.textContent = acceptedTags.length ? 'Click × to remove · add more below' : 'No tags yet — add some below';
   } catch {
     saveTagsBtn.disabled = false;
     alert('Failed to save tags.');
-  }
-});
-
-/* ── Export video with overlay ──────────────────────────── */
-function resetExportBtn() {
-  exportVideoBtn.disabled     = false;
-  exportVideoBtn.dataset.mode = 'export';
-  exportVideoBtn.dataset.hash = '';
-  exportVideoBtn.innerHTML    = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v7M5 6l3 3 3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg> Export with Overlay`;
-}
-
-function triggerDownload(url, filename) {
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  if (isMobile) {
-    window.open(url, '_blank');
-  } else {
-    const a = document.createElement('a');
-    a.href = url; a.download = filename; a.style.display = 'none';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  }
-}
-
-exportVideoBtn.addEventListener('click', async () => {
-  if (exportVideoBtn.disabled) return;
-  const mode = exportVideoBtn.dataset.mode || 'export';
-
-  if (mode === 'download') {
-    const hash = exportVideoBtn.dataset.hash;
-    const url  = `/api/overlay/${hash}`;
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobile) {
-      window.open(url, '_blank');
-    } else {
-      const a = document.createElement('a');
-      a.href = url; a.download = `synthcheck_overlay.mp4`; a.style.display = 'none';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    }
-    return;
-  }
-
-  if (!currentFile) return;
-  exportVideoBtn.disabled  = true;
-  exportVideoBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" class="spin-icon"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.8" stroke-dasharray="28" stroke-dashoffset="10"/></svg> Rendering…`;
-
-  try {
-    const formData = new FormData();
-    formData.append('file', currentFile);
-    const res = await fetch('/api/export-video', { method: 'POST', body: formData });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }));
-      alert('Export failed: ' + (err.detail || 'Unknown error'));
-      return;
-    }
-    const blob = await res.blob();
-    const url  = URL.createObjectURL(blob);
-    const stem = currentFile.name.replace(/\.[^.]+$/, '');
-    triggerDownload(url, `synthcheck_${stem}.mp4`);
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (!isMobile) URL.revokeObjectURL(url);
-    else setTimeout(() => URL.revokeObjectURL(url), 60000);
-
-    if (currentHash) {
-      exportVideoBtn.innerHTML    = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v7M5 6l3 3 3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg> Download Overlay`;
-      exportVideoBtn.dataset.mode = 'download';
-      exportVideoBtn.dataset.hash = currentHash;
-      exportVideoBtn.disabled     = false;
-    } else {
-      resetExportBtn();
-    }
-  } catch {
-    alert('Export failed — is the server running?');
-    resetExportBtn();
-  } finally {
-    if (exportVideoBtn.dataset.mode !== 'download') resetExportBtn();
   }
 });
 
@@ -472,7 +465,6 @@ libraryBackBtn.addEventListener('click', () => {
   hide(librarySection); show(uploadSection);
 });
 
-// Type tabs
 document.querySelectorAll('.lib-tab').forEach(tab => {
   tab.addEventListener('click', () => {
     libActiveType = tab.dataset.type;
@@ -481,7 +473,6 @@ document.querySelectorAll('.lib-tab').forEach(tab => {
   });
 });
 
-// Tag filter clear
 libTagClearBtn.addEventListener('click', () => {
   libActiveTag = null;
   libTagClearBtn.classList.add('hidden');
@@ -491,7 +482,7 @@ libTagClearBtn.addEventListener('click', () => {
 
 async function loadLibrary() {
   try {
-    const res   = await fetch('/api/library');
+    const res    = await fetch('/api/library');
     libraryItems = await res.json();
     buildTagFilterBar(libraryItems);
     applyLibraryFilter();
@@ -502,16 +493,11 @@ async function loadLibrary() {
 }
 
 function buildTagFilterBar(items) {
-  // Collect all unique tags across all items
   const tagCount = {};
   items.forEach(item => (item.tags || []).forEach(t => { tagCount[t] = (tagCount[t] || 0) + 1; }));
   const allTags = Object.entries(tagCount).sort((a, b) => b[1] - a[1]).map(([t]) => t);
-
   libTagChips.innerHTML = '';
-  if (!allTags.length) {
-    libTagFilter.classList.add('hidden');
-    return;
-  }
+  if (!allTags.length) { libTagFilter.classList.add('hidden'); return; }
   libTagFilter.classList.remove('hidden');
   allTags.forEach(tag => {
     const chip = document.createElement('button');
@@ -540,8 +526,7 @@ function renderLibrary(items) {
   const total = document.getElementById('libraryTotal');
   grid.innerHTML = '';
   total.textContent = libraryItems.length
-    ? `${libraryItems.length} item${libraryItems.length === 1 ? '' : 's'}`
-    : '';
+    ? `${libraryItems.length} item${libraryItems.length === 1 ? '' : 's'}` : '';
 
   if (!items.length) { empty.classList.remove('hidden'); return; }
   empty.classList.add('hidden');
@@ -578,7 +563,6 @@ function renderLibrary(items) {
         ${tagsHtml ? `<div class="lib-card-tags">${tagsHtml}</div>` : ''}
       </div>`;
 
-    // Tag clicks filter library; card click loads result
     card.querySelectorAll('.lib-card-tag[data-tag]').forEach(tagEl => {
       tagEl.addEventListener('click', e => {
         e.stopPropagation();

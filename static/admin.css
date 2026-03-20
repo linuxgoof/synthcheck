@@ -485,6 +485,24 @@ a:hover { text-decoration: underline; }
   border-radius: 6px;
   pointer-events: none;
 }
+.modal-video-download {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(168,85,247,0.25);
+  border: 1px solid rgba(168,85,247,0.4);
+  color: #c084fc;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 7px;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.modal-video-download:hover { background: rgba(168,85,247,0.4); text-decoration: none; }
 .modal-meta-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
