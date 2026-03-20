@@ -209,6 +209,27 @@
         </div>
       </div>
 
+      <!-- Tags section -->
+      <div class="tags-section" id="tagsSection">
+        <div class="tags-header">
+          <span class="tags-title">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 1h5l6 6-5 5-6-6V1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="4" cy="4" r="1" fill="currentColor"/></svg>
+            Tags
+          </span>
+          <span class="tags-hint" id="tagsHint">AI-suggested · click to accept</span>
+        </div>
+        <div class="tags-suggested hidden" id="tagsSuggested"></div>
+        <div class="tags-saved" id="tagsSaved"></div>
+        <div class="tags-add-row">
+          <input class="tags-input" id="tagInput" type="text" placeholder="Add a tag…" maxlength="40" />
+          <button class="btn-add-tag" id="addTagBtn">Add</button>
+        </div>
+        <button class="btn-save-tags hidden" id="saveTagsBtn">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7l4 4 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Save Tags
+        </button>
+      </div>
+
       <div class="result-actions">
         <button class="btn-export-video hidden" id="exportVideoBtn">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v7M5 6l3 3 3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 11v1a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
@@ -240,10 +261,23 @@
           <h2 class="library-title">Library</h2>
           <span class="library-total" id="libraryTotal"></span>
         </div>
-        <button class="btn-library-back" id="libraryBackBtn">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Back
-        </button>
+        <div class="library-controls">
+          <div class="library-type-tabs">
+            <button class="lib-tab active" data-type="all">All</button>
+            <button class="lib-tab" data-type="image">Images</button>
+            <button class="lib-tab" data-type="video">Videos</button>
+          </div>
+          <button class="btn-library-back" id="libraryBackBtn">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Back
+          </button>
+        </div>
+      </div>
+      <!-- Tag filter bar -->
+      <div class="lib-tag-filter hidden" id="libTagFilter">
+        <span class="lib-tag-filter-label">Filter by tag:</span>
+        <div class="lib-tag-chips" id="libTagChips"></div>
+        <button class="lib-tag-clear hidden" id="libTagClearBtn">Clear</button>
       </div>
       <div class="library-grid" id="libraryGrid"></div>
       <div class="library-empty hidden" id="libraryEmpty">

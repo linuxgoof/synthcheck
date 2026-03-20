@@ -1,5 +1,7 @@
 import os
+import re
 import logging
+import threading
 import subprocess
 import numpy as np
 from pathlib import Path
@@ -7,6 +9,128 @@ from PIL import Image
 import cv2
 
 logger = logging.getLogger(__name__)
+
+
+# ── BLIP tag generation (lazy-loaded) ─────────────────────────────────────────
+
+BLIP_MODEL  = "Salesforce/blip-image-captioning-base"
+_blip_pipe  = None
+_blip_lock  = threading.Lock()
+
+_STOPWORDS = frozenset({
+    'a','an','the','is','are','was','were','be','been','being',
+    'in','on','at','of','with','and','or','to','for','by','from',
+    'up','down','its','it','he','she','they','there','some','this',
+    'that','these','those','has','have','had','do','does','did',
+    'but','so','if','as','into','onto','about','above','below',
+    'after','before','between','through','during','over','under',
+    'then','than','very','just','also','still','back','out','off',
+    'can','could','would','should','will','may','might','must',
+    'not','no','nor','while','where','when','how','what','which',
+    'who','whose','each','every','both','all','any','few','more',
+    'most','own','same','such','only','too','even','far','near',
+    'here','again','once','around','away','already','always',
+})
+
+_GENERIC = frozenset({
+    'person','man','woman','boy','girl','people','human','individual',
+    'image','photo','photograph','picture','video','frame','scene',
+    'view','shot','background','foreground','object','thing','stuff',
+    'area','place','spot','location','space','region','part','side',
+    'large','small','big','little','long','short','tall','high','low',
+    'good','bad','nice','great','old','new','young','next','second',
+    'white','black','light','dark','bright','looking','standing',
+    'sitting','front','color','colour','type','kind','lot','many',
+    'much','different','various','first','last','close','open',
+    'holding','wearing','walking','running','showing','making',
+    'taking','getting','going','coming','seeing','using','appears',
+    'look','looks','seem','seems','two','one','three','four','five',
+    'group','set','several',
+})
+
+
+def _get_blip():
+    global _blip_pipe
+    with _blip_lock:
+        if _blip_pipe is None:
+            from transformers import pipeline as hf_pipeline
+            logger.info("Loading BLIP captioning model for tag generation…")
+            _blip_pipe = hf_pipeline(
+                "image-to-text", model=BLIP_MODEL, device=-1,
+                max_new_tokens=40,
+            )
+            logger.info("BLIP model loaded.")
+    return _blip_pipe
+
+
+def _caption_to_candidates(caption: str) -> list[str]:
+    """Extract specific compound tag candidates from a single caption string."""
+    text   = re.sub(r'[^\w\s]', '', caption.lower())
+    words  = [w for w in text.split() if len(w) > 2 and w not in _STOPWORDS]
+    result = []
+    seen: set[str] = set()
+
+    # 2-word compounds first — more specific than singles
+    for i in range(len(words) - 1):
+        w1, w2 = words[i], words[i + 1]
+        if w1 not in _GENERIC or w2 not in _GENERIC:
+            tag = f"{w1}-{w2}"
+            if tag not in seen:
+                result.append(tag)
+                seen.add(tag)
+
+    # Single specific words as fallback (length > 4, non-generic)
+    for w in words:
+        if w not in _GENERIC and len(w) > 4 and w not in seen:
+            result.append(w)
+            seen.add(w)
+
+    return result
+
+
+def generate_tags(file_path: str, file_type: str, max_tags: int = 5) -> list[str]:
+    """
+    Auto-generate descriptive hashtags using BLIP captioning.
+    Returns up to max_tags specific compound-phrase tags.
+    Silently returns [] on any error so analysis is never blocked.
+    """
+    try:
+        blip = _get_blip()
+        captions: list[str] = []
+
+        if file_type == "image":
+            img = Image.open(file_path).convert("RGB")
+            out = blip(img)
+            captions.append(out[0]["generated_text"])
+        elif file_type == "video":
+            cap   = cv2.VideoCapture(file_path)
+            total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
+            for frac in (0.2, 0.5, 0.8):
+                idx = max(0, int(total * frac))
+                cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
+                ret, frame = cap.read()
+                if ret:
+                    img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+                    out = blip(img)
+                    captions.append(out[0]["generated_text"])
+            cap.release()
+
+        # Merge across captions, compounds first
+        all_cands: list[str] = []
+        seen: set[str] = set()
+        for cap_text in captions:
+            for cand in _caption_to_candidates(cap_text):
+                if cand not in seen:
+                    all_cands.append(cand)
+                    seen.add(cand)
+
+        compound = [t for t in all_cands if '-' in t]
+        single   = [t for t in all_cands if '-' not in t]
+        return (compound + single)[:max_tags]
+
+    except Exception as exc:
+        logger.warning(f"Tag generation failed (non-fatal): {exc}")
+        return []
 
 
 # ── Overlay helpers ────────────────────────────────────────────────────────────

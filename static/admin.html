@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SynthCheck Admin</title>
+  <link rel="stylesheet" href="/admin.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- Login screen -->
+  <div class="login-screen" id="loginScreen">
+    <div class="login-card">
+      <div class="login-logo">
+        <svg width="32" height="32" viewBox="0 0 28 28" fill="none">
+          <rect x="2"  y="11" width="3" height="6"  rx="1.5" fill="url(#alg)"/>
+          <rect x="7"  y="7"  width="3" height="14" rx="1.5" fill="url(#alg)"/>
+          <rect x="12" y="4"  width="3" height="20" rx="1.5" fill="url(#alg)"/>
+          <rect x="17" y="7"  width="3" height="14" rx="1.5" fill="url(#alg)"/>
+          <rect x="22" y="10" width="3" height="8"  rx="1.5" fill="url(#alg)"/>
+          <defs>
+            <linearGradient id="alg" x1="0" y1="0" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#a855f7"/>
+              <stop offset="100%" stop-color="#ef4444"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <span>SynthCheck Admin</span>
+      </div>
+      <p class="login-sub">Enter your admin key to continue</p>
+      <div class="login-form">
+        <input type="password" id="adminKeyInput" placeholder="Admin key" autocomplete="off" />
+        <button id="loginBtn">Enter</button>
+      </div>
+      <p class="login-error hidden" id="loginError">Invalid key. Check server logs for your admin key.</p>
+      <a class="login-back" href="/">← Back to SynthCheck</a>
+    </div>
+  </div>
+
+  <!-- Admin panel (hidden until login) -->
+  <div class="admin-panel hidden" id="adminPanel">
+
+    <!-- Sidebar -->
+    <aside class="admin-sidebar">
+      <div class="sidebar-logo">
+        <svg width="20" height="20" viewBox="0 0 28 28" fill="none">
+          <rect x="2"  y="11" width="3" height="6"  rx="1.5" fill="url(#slg)"/>
+          <rect x="7"  y="7"  width="3" height="14" rx="1.5" fill="url(#slg)"/>
+          <rect x="12" y="4"  width="3" height="20" rx="1.5" fill="url(#slg)"/>
+          <rect x="17" y="7"  width="3" height="14" rx="1.5" fill="url(#slg)"/>
+          <rect x="22" y="10" width="3" height="8"  rx="1.5" fill="url(#slg)"/>
+          <defs>
+            <linearGradient id="slg" x1="0" y1="0" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#a855f7"/>
+              <stop offset="100%" stop-color="#ef4444"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <span>Admin</span>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-view="library">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.5"/></svg>
+          Library
+          <span class="nav-badge" id="libCount">0</span>
+        </button>
+        <button class="nav-item" data-view="tags">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2h6l6 6-6 6-6-6V2z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><circle cx="5" cy="5" r="1.2" fill="currentColor"/></svg>
+          Tags
+          <span class="nav-badge" id="tagCount">0</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-stats" id="sidebarStats">
+        <div class="stat-row"><span>Total items</span><span id="statTotal">—</span></div>
+        <div class="stat-row"><span>Images</span><span id="statImages">—</span></div>
+        <div class="stat-row"><span>Videos</span><span id="statVideos">—</span></div>
+        <div class="stat-row"><span>AI detected</span><span id="statAi">—</span></div>
+        <div class="stat-row"><span>Overlays</span><span id="statOverlays">—</span></div>
+      </div>
+
+      <div class="sidebar-footer">
+        <a href="/" class="sidebar-back">← Main site</a>
+        <button class="btn-logout" id="logoutBtn">Log out</button>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="admin-main">
+
+      <!-- Library view -->
+      <div class="admin-view active" id="viewLibrary">
+        <div class="view-header">
+          <h1 class="view-title">Library</h1>
+          <div class="view-controls">
+            <input type="search" class="admin-search" id="libSearch" placeholder="Search by filename or tag…" />
+            <select class="admin-select" id="libTypeFilter">
+              <option value="all">All types</option>
+              <option value="image">Images</option>
+              <option value="video">Videos</option>
+            </select>
+            <select class="admin-select" id="libVerdictFilter">
+              <option value="all">All verdicts</option>
+              <option value="ai">AI Generated</option>
+              <option value="real">Real</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="admin-lib-grid" id="adminLibGrid"></div>
+        <div class="admin-empty hidden" id="adminLibEmpty">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><rect x="8" y="8" width="32" height="32" rx="8" stroke="#3d3d5a" stroke-width="2"/><path d="M18 24h12M24 18v12" stroke="#3d3d5a" stroke-width="2" stroke-linecap="round"/></svg>
+          <p>No items found.</p>
+        </div>
+      </div>
+
+      <!-- Tags view -->
+      <div class="admin-view" id="viewTags">
+        <div class="view-header">
+          <h1 class="view-title">Tags</h1>
+        </div>
+        <div class="admin-tags-list" id="adminTagsList"></div>
+        <div class="admin-empty hidden" id="adminTagsEmpty">
+          <p>No tags yet.</p>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Item detail modal -->
+  <div class="modal-overlay hidden" id="modalOverlay">
+    <div class="modal" id="itemModal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="modalTitle">Item Details</h3>
+        <button class="modal-close" id="modalClose">×</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <!-- Confirm dialog -->
+  <div class="modal-overlay hidden" id="confirmOverlay">
+    <div class="modal confirm-modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Confirm Delete</h3>
+      </div>
+      <div class="modal-body">
+        <p id="confirmMsg">Are you sure you want to delete this item? This cannot be undone.</p>
+        <div class="confirm-actions">
+          <button class="btn-confirm-cancel" id="confirmCancel">Cancel</button>
+          <button class="btn-confirm-delete" id="confirmOk">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/admin.js"></script>
+</body>
+</html>
