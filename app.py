@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI):
     ADMIN_KEY = _load_or_create_admin_key()
     logger.info("=" * 60)
     logger.info(f"  Admin key  : {ADMIN_KEY}")
-    logger.info(f"  Admin panel: http://localhost:8000/admin.html")
+    logger.info(f"  Admin panel: http://localhost:8000/lzxvven8.html")
     logger.info("=" * 60)
     logger.info("Initializing AI detector models (this may take a minute on first run)…")
     detector = AIDetector(use_ensemble=True)
