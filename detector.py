@@ -13,9 +13,10 @@ logger = logging.getLogger(__name__)
 
 # ── BLIP tag generation (lazy-loaded) ─────────────────────────────────────────
 
-BLIP_MODEL  = "Salesforce/blip-image-captioning-base"
-_blip_pipe  = None
-_blip_lock  = threading.Lock()
+BLIP_MODEL      = "Salesforce/blip-image-captioning-base"
+_blip_processor = None
+_blip_model     = None
+_blip_lock      = threading.Lock()
 
 _STOPWORDS = frozenset({
     'a','an','the','is','are','was','were','be','been','being',
@@ -50,17 +51,26 @@ _GENERIC = frozenset({
 
 
 def _get_blip():
-    global _blip_pipe
+    global _blip_processor, _blip_model
     with _blip_lock:
-        if _blip_pipe is None:
-            from transformers import pipeline as hf_pipeline
+        if _blip_model is None:
+            from transformers import BlipProcessor, BlipForConditionalGeneration
+            import torch
             logger.info("Loading BLIP captioning model for tag generation…")
-            _blip_pipe = hf_pipeline(
-                "image-to-text", model=BLIP_MODEL, device=-1,
-                max_new_tokens=40,
-            )
+            _blip_processor = BlipProcessor.from_pretrained(BLIP_MODEL)
+            _blip_model     = BlipForConditionalGeneration.from_pretrained(BLIP_MODEL)
+            _blip_model.eval()
             logger.info("BLIP model loaded.")
-    return _blip_pipe
+    return _blip_processor, _blip_model
+
+
+def _blip_caption(img: Image.Image) -> str:
+    import torch
+    proc, model = _get_blip()
+    inputs = proc(img.convert("RGB"), return_tensors="pt")
+    with torch.no_grad():
+        out = model.generate(**inputs, max_new_tokens=40)
+    return proc.decode(out[0], skip_special_tokens=True)
 
 
 def _caption_to_candidates(caption: str) -> list[str]:
@@ -95,13 +105,10 @@ def generate_tags(file_path: str, file_type: str, max_tags: int = 5) -> list[str
     Silently returns [] on any error so analysis is never blocked.
     """
     try:
-        blip = _get_blip()
         captions: list[str] = []
 
         if file_type == "image":
-            img = Image.open(file_path).convert("RGB")
-            out = blip(img)
-            captions.append(out[0]["generated_text"])
+            captions.append(_blip_caption(Image.open(file_path)))
         elif file_type == "video":
             cap   = cv2.VideoCapture(file_path)
             total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) or 1
@@ -111,8 +118,7 @@ def generate_tags(file_path: str, file_type: str, max_tags: int = 5) -> list[str
                 ret, frame = cap.read()
                 if ret:
                     img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-                    out = blip(img)
-                    captions.append(out[0]["generated_text"])
+                    captions.append(_blip_caption(img))
             cap.release()
 
         # Merge across captions, compounds first
