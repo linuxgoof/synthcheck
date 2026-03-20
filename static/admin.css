@@ -461,6 +461,30 @@ a:hover { text-decoration: underline; }
   object-fit: cover;
   border-radius: 10px;
 }
+.modal-video-wrap {
+  position: relative;
+  background: #000;
+  border-radius: 10px;
+  overflow: hidden;
+}
+.modal-video {
+  width: 100%;
+  max-height: 320px;
+  display: block;
+  border-radius: 10px;
+}
+.modal-video-label {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  background: rgba(0,0,0,0.65);
+  color: #c084fc;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 6px;
+  pointer-events: none;
+}
 .modal-meta-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -188,8 +188,22 @@ async function openItemModal(hash) {
   const aiPct = Math.round((data.ai_probability || 0) * 100);
 
   document.getElementById('modalTitle').textContent = data.filename || hash;
+
+  // Media preview: overlay video > thumbnail image > nothing
+  const isVideo = data.type === 'video';
+  let mediaHtml = '';
+  if (isVideo && data.overlay_ready) {
+    mediaHtml = `
+      <div class="modal-video-wrap">
+        <video class="modal-video" src="/api/overlay/${hash}" controls playsinline preload="metadata"></video>
+        <span class="modal-video-label">AI Meter Overlay</span>
+      </div>`;
+  } else if (data.thumbnail_url) {
+    mediaHtml = `<img src="${data.thumbnail_url}" class="modal-thumb" alt="">`;
+  }
+
   document.getElementById('modalBody').innerHTML = `
-    ${data.thumbnail_url ? `<img src="${data.thumbnail_url}" class="modal-thumb" alt="">` : ''}
+    ${mediaHtml}
     <div class="modal-meta-grid">
       <div class="modal-meta-item">
         <div class="modal-meta-key">Verdict</div>
